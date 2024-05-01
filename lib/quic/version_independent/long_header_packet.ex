@@ -1,5 +1,6 @@
 defmodule Quic.VersionIndependent.LongHeaderPacket do
   defstruct [
+    :addressing_information,
     :version_specific_bits,
     :version,
     :destination_connection_id,

@@ -15,13 +15,15 @@ defmodule Quic.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :ssl]
+      extra_applications: [:logger, :crypto, :ssl],
+      mod: {Quic.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:gen_state_machine, "~> 3.0"},
       {:bandit, "~> 1.0", only: :dev}
     ]
   end

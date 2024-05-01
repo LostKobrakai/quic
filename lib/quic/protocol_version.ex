@@ -3,8 +3,7 @@ defmodule Quic.ProtocolVersion do
 
   @type t :: module()
 
-  @callback parse_contextless(
-              VersionIndependent.LongHeaderPacket.t()
-              | VersionIndependent.ShortHeaderPacket.t()
-            ) :: {:ok, Quic.protocol_packet(), rest :: binary()}
+  @callback child_spec(term) :: Supervisor.child_spec()
+
+  @callback transfer_handling(Quic.Config.t(), VersionIndependent.packet()) :: :ok
 end

@@ -1,5 +1,6 @@
 defmodule Quic.VersionIndependent.ShortHeaderPacket do
   defstruct [
+    :addressing_information,
     :version_specific_bits,
     :destination_connection_id,
     :version_specific_data

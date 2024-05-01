@@ -1,9 +1,36 @@
 defmodule Quic.Version1 do
+  use Supervisor
   alias Quic.VersionIndependent
 
-  @behaviour Quick.ProtocolVersion
+  @behaviour Quic.ProtocolVersion
 
-  @impl Quick.ProtocolVersion
+  def start_link(%Quic.Config{} = config) do
+    Supervisor.start_link(__MODULE__, config)
+  end
+
+  @impl Supervisor
+  def init(%Quic.Config{} = config) do
+    children = [
+      {Quic.Version1.ConnectionSupervisor, config}
+    ]
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  @impl Quic.ProtocolVersion
+  def transfer_handling(%Quic.Config{} = config, %VersionIndependent.LongHeaderPacket{} = packet) do
+    case Quic.Version1.ConnectionSupervisor.start_connection(config, packet) do
+      {:ok, pid} when is_pid(pid) -> :ok
+      {:error, {:already_started, pid}} when is_pid(pid) -> :ok
+    end
+
+    Quic.Version1.Connection.process_packet(config, packet.destination_connection_id, packet)
+  rescue
+    _ ->
+      # TODO log exception
+      :ok
+  end
+
   def parse_contextless(%VersionIndependent.LongHeaderPacket{} = packet) do
     case Quic.Version1.validate_v1_packet(packet) do
       {:ok, packet_type} ->
