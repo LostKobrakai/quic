@@ -17,7 +17,7 @@ defmodule Quic.Listener do
     case start_parsing_dataframe(dataframe) do
       {:continue, packet, impl} ->
         port = with 0 <- port, do: :inet.port(socket)
-        %{packet | addressing_information: {address, port}}
+        packet = %{packet | addressing_information: {address, port}}
 
         Logger.debug(
           "Handing packet over to protocol implementation: #{inspect(impl)} #{inspect(packet)}"
