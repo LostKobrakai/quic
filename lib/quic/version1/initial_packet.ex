@@ -92,38 +92,29 @@ defmodule Quic.Version1.InitialPacket do
     sample
   end
 
-  # Reconsider hardcoded 32 bit for package_number
   defp unprotect_header(connection_id, version_specific_bits, rest) do
     sample = get_sample(rest)
     initial_secret = Secret.initial_secret(connection_id)
     initial_client_secret = Secret.client_initial_secret(initial_secret)
     hp_key = Secret.header_protection_key(initial_client_secret)
 
-    <<_::bitstring-4, mask_bits::4, mask_packet_number::32>> =
-      Secret.mask(hp_key, sample)
-
-    <<first_byte::8>> = <<1::1, version_specific_bits::bitstring>>
-    unprotected_first_byte = Bitwise.bxor(first_byte, mask_bits)
+    <<_::4, mask_bits::4, mask_packet_number::binary-size(4)>> = Secret.mask(hp_key, sample)
 
     <<1::1, unprotected_version_specific_bits::bitstring-7>> =
-      <<unprotected_first_byte::8>>
+      :crypto.exor(<<1::1, version_specific_bits::bitstring-7>>, <<0::4, mask_bits::4>>)
 
-    # Unprotect using max packet_number size of 4 bytes
-    <<packet_number::4*8, _rest::binary>> = rest
-    unprotected_packet_number = Bitwise.bxor(packet_number, mask_packet_number)
-
-    # Properly stitch together unprotected packet number without affecting the rest of the payload
+    # Unprotect all of max packet_number size of 4 bytes
+    # Select only packet_number_bits though
     <<_::5, packet_number_length::2>> = unprotected_version_specific_bits
-    packet_number_bits = (packet_number_length + 1) * 8
 
-    <<actual_packet_number::size(packet_number_bits), _::binary>> =
-      <<unprotected_packet_number::32>>
+    <<actual_packet_number::size(packet_number_length + 1)-unit(8), _::binary>> =
+      :crypto.exor(:binary.part(rest, 0, 4), mask_packet_number)
 
-    <<_::size(packet_number_bits), actual_rest::binary>> = rest
+    <<_::size(packet_number_length + 1)-unit(8), actual_rest::binary>> = rest
 
     {
       unprotected_version_specific_bits,
-      <<actual_packet_number::size(packet_number_bits), actual_rest::binary>>
+      <<actual_packet_number::size(packet_number_length + 1)-unit(8), actual_rest::binary>>
     }
   end
 
@@ -160,8 +151,11 @@ defmodule Quic.Version1.InitialPacket do
     initial_client_secret = Secret.client_initial_secret(initial_secret)
     key = Secret.key(initial_client_secret)
 
-    <<iv::96>> = Secret.iv(initial_client_secret)
-    nonce = <<Bitwise.bxor(header_packet.packet_number, iv)::96>>
+    nonce =
+      :crypto.exor(
+        <<header_packet.packet_number::96>>,
+        Secret.iv(initial_client_secret)
+      )
 
     payload_length = header_packet.length - (header_packet.packet_number_length + 1) - 16
 
