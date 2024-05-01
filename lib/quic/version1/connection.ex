@@ -35,7 +35,13 @@ defmodule Quic.Version1.Connection do
   @impl GenStateMachine
   def handle_event(:cast, {:process_packet, packet}, _, data)
       when packet.destination_connection_id in [data.original_connection_id, data.connection_id] do
-    {:ok, _protocol_packet, _rest} = Quic.Version1.parse_contextless(packet) |> IO.inspect()
+    {:ok, protocol_packet, _rest} = Quic.Version1.parse_contextless(packet)
+    [[<<0x06>>, client_hello] | _] = protocol_packet.frames
+
+    # Not sure why the first 4 bytes need to be stripped
+    Quic.Version1.TLS.parse_client_hello(binary_slice(client_hello, 4..-1//1))
+    |> IO.inspect()
+
     :keep_state_and_data
   end
 

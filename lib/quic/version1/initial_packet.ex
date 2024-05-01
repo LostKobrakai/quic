@@ -10,7 +10,8 @@ defmodule Quic.Version1.InitialPacket do
     :length,
     :packet_number_length,
     :packet_number,
-    :payload
+    :payload,
+    :frames
   ]
 
   alias Quic.VersionIndependent
@@ -39,9 +40,9 @@ defmodule Quic.Version1.InitialPacket do
 
     {:ok, payload, coalesced_packets} = unprotect_payload(header_packet, protected_payload)
 
-    unpad_payload(payload)
+    frames = unpad_payload(payload)
 
-    {:ok, %__MODULE__{header_packet | payload: payload}, coalesced_packets}
+    {:ok, %__MODULE__{header_packet | payload: payload, frames: frames}, coalesced_packets}
   end
 
   def to_binary(%__MODULE__{
@@ -118,6 +119,33 @@ defmodule Quic.Version1.InitialPacket do
     }
   end
 
+  def unprotect_payload(header_packet, protocted_payload) do
+    initial_secret = Secret.initial_secret(header_packet.destination_connection_id)
+    initial_client_secret = Secret.client_initial_secret(initial_secret)
+    key = Secret.key(initial_client_secret)
+
+    nonce =
+      :crypto.exor(
+        <<header_packet.packet_number::96>>,
+        Secret.iv(initial_client_secret)
+      )
+
+    payload_length = header_packet.length - (header_packet.packet_number_length + 1) - 16
+
+    <<
+      payload::binary-size(payload_length),
+      tag::binary-size(16),
+      coalesced_packets::binary
+    >> = protocted_payload
+
+    header = to_binary(header_packet)
+
+    case :crypto.crypto_one_time_aead(:aes_128_gcm, key, nonce, payload, header, tag, false) do
+      unprotected when is_binary(unprotected) -> {:ok, unprotected, coalesced_packets}
+      :error -> :error
+    end
+  end
+
   defp unpad_payload(payload) when is_binary(payload) do
     payload
     |> Stream.unfold(fn
@@ -144,32 +172,5 @@ defmodule Quic.Version1.InitialPacket do
     <<crypto::binary-size(length), rest::binary>> = rest
 
     {crypto, rest}
-  end
-
-  def unprotect_payload(header_packet, protocted_payload) do
-    initial_secret = Secret.initial_secret(header_packet.destination_connection_id)
-    initial_client_secret = Secret.client_initial_secret(initial_secret)
-    key = Secret.key(initial_client_secret)
-
-    nonce =
-      :crypto.exor(
-        <<header_packet.packet_number::96>>,
-        Secret.iv(initial_client_secret)
-      )
-
-    payload_length = header_packet.length - (header_packet.packet_number_length + 1) - 16
-
-    <<
-      payload::binary-size(payload_length),
-      tag::binary-size(16),
-      coalesced_packets::binary
-    >> = protocted_payload
-
-    header = to_binary(header_packet)
-
-    case :crypto.crypto_one_time_aead(:aes_128_gcm, key, nonce, payload, header, tag, false) do
-      unprotected when is_binary(unprotected) -> {:ok, unprotected, coalesced_packets}
-      :error -> :error
-    end
   end
 end

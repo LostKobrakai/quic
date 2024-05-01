@@ -100,6 +100,11 @@ defmodule Quic.RFC9001Test do
         |> Base.decode16!(case: :lower)
 
       assert unpadded_payload == packet.payload |> :binary.part(0, byte_size(unpadded_payload))
+
+      [[<<0x06>>, client_hello] | _] = packet.frames
+
+      Quic.Version1.TLS.parse_client_hello(binary_slice(client_hello, 4..-1//1))
+      |> IO.inspect()
     end
   end
 
@@ -127,6 +132,11 @@ defmodule Quic.RFC9001Test do
       assert packet.packet_number_length == 0
       assert packet.packet_number == 0
       assert packet.reserved == 0
+
+      [[<<0x06>>, client_hello]] = packet.frames
+
+      Quic.Version1.TLS.parse_client_hello(binary_slice(client_hello, 4..-1//1))
+      |> IO.inspect()
     end
   end
 end
