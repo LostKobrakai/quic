@@ -1,5 +1,8 @@
 defmodule Quic.VersionIndependent do
   alias Quic.VersionIndependent.LongHeaderPacket
+  alias Quic.VersionIndependent.ShortHeaderPacket
+
+  @type packet :: LongHeaderPacket.t() | ShortHeaderPacket.t()
 
   def version_negotiation_packet(%LongHeaderPacket{} = cause, supported)
       when cause.version != 0 do
